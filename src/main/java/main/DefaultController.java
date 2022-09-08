@@ -45,6 +45,7 @@ public class DefaultController {
     public WebSearchAnswer request(WebSearchRequest request) {
 
         WebSearchAnswer answer = new WebSearchAnswer();
+        List<WebSearchAnswer.WebSearchData> dataList = new ArrayList<>();
 
         int counter = 0;
 
@@ -205,19 +206,30 @@ public class DefaultController {
                     for (Page page : pageRepository.findAll()) {
                         if (!page.getSiteId().equals(siteId)) { continue; }
                         if (page.getId().equals(pageId)) {
+
+                            counter++;
                             String[] line = new String[5];
 //                            line[0] = url + (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
                             line[0] = (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
                             line[1] = Jsoup.parse(page.getContent()).select("title").get(0).text();
-                            if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
-                                line[2] = "..." + lemmatization.snippet(firstLemma,page.getContent()) + "...";
-                            } else {
-                             line[2] = "N/A - out of offset and limit";
-                            }
                             line[3] = relRel.get(pageId).toString();
                             line[4] = url;
+                            if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
+                                line[2] = "..." + lemmatization.snippet(firstLemma,page.getContent()) + "...";
+
+                                WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
+                                newData.setSite(line[4]);
+                                newData.setSiteName(line[4]);
+                                newData.setUri(line[0]);
+                                newData.setTitle(line[1]);
+                                newData.setSnippet(line[2]);
+                                newData.setRelevance(Float.parseFloat(line[3]));
+                                dataList.add(newData);
+
+                            } else {
+                                line[2] = "N/A - out of offset and limit";
+                            }
                             resultList.add(line);
-                            counter++;
 
                         }
                     }
@@ -228,28 +240,6 @@ public class DefaultController {
             }
 
             answer.setResult(true);
-
-            List<WebSearchAnswer.WebSearchData> dataList = new ArrayList<>();
-
-            counter = 0;
-            if (!resultList.isEmpty()) {
-                for (String[] result : resultList) {
-
-                    counter++;
-                    if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
-                        WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
-                        newData.setSite(result[4]);
-                        newData.setSiteName(result[4]);
-                        newData.setUri(result[0]);
-                        newData.setTitle(result[1]);
-                        newData.setSnippet(result[2]);
-                        newData.setRelevance(Float.parseFloat(result[3]));
-                        dataList.add(newData);
-                    }
-
-                }
-            }
-
             answer.setCount(counter);
             answer.setData(dataList);
 
