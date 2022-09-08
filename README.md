@@ -4,6 +4,7 @@
 _MySQL_ database should be preinstalled on your server (MySQL server adress and login/password info are defined in SearchEngine configuration file **"application.yaml"**).
 http://localhost:8080/search_engine is used as default.
 _The list of internet sites_ which should be parsed and indexed is stored with _configuration file_ too and may be changed as required.
+
 NOTE: it is suggested to write "/" slash at the end of each internet site adress entered into the list.
 
 The access to Web Application and its administration is performed through the base page **http://localhost:8080/admin**
