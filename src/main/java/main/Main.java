@@ -25,8 +25,8 @@ public class Main {
 //    PRIMARY KEY (`id`))
 //    ENGINE = InnoDB
 //    DEFAULT CHARACTER SET = utf8;
-
-
+//
+//
 //        field
 //
 //
@@ -38,13 +38,13 @@ public class Main {
 //    PRIMARY KEY (`id`))
 //    ENGINE = InnoDB
 //    DEFAULT CHARACTER SET = utf8;
-
-
+//
+//
 //    INSERT INTO `field` VALUES (1,'title','title',1.0)
 //    INSERT INTO `field` VALUES (2,'body','body',0.8)
-
-
-
+//
+//
+//
 //    lemma
 //
 //
@@ -56,8 +56,8 @@ public class Main {
 //    PRIMARY KEY (`id`))
 //    ENGINE = InnoDB
 //    DEFAULT CHARACTER SET = utf8;
-
-
+//
+//
 //        indexe
 //
 //
@@ -70,8 +70,8 @@ public class Main {
 //    PRIMARY KEY (`id`))
 //    ENGINE = InnoDB
 //    DEFAULT CHARACTER SET = utf8;
-
-
+//
+//
 //        site
 //
 //

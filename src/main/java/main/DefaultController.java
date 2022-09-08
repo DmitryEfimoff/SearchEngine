@@ -46,6 +46,8 @@ public class DefaultController {
 
         WebSearchAnswer answer = new WebSearchAnswer();
 
+        int counter = 0;
+
         if (urlList.isEmpty()) {
             SiteList.getUrls().forEach(u -> urlList.add(u));
 
@@ -204,12 +206,18 @@ public class DefaultController {
                         if (!page.getSiteId().equals(siteId)) { continue; }
                         if (page.getId().equals(pageId)) {
                             String[] line = new String[5];
-                            line[0] = url + (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
+//                            line[0] = url + (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
+                            line[0] = (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
                             line[1] = Jsoup.parse(page.getContent()).select("title").get(0).text();
-                            line[2] = lemmatization.snippet(firstLemma,page.getContent());
+                            if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
+                                line[2] = "..." + lemmatization.snippet(firstLemma,page.getContent()) + "...";
+                            } else {
+                             line[2] = "N/A - out of offset and limit";
+                            }
                             line[3] = relRel.get(pageId).toString();
                             line[4] = url;
                             resultList.add(line);
+                            counter++;
 
                         }
                     }
@@ -223,7 +231,7 @@ public class DefaultController {
 
             List<WebSearchAnswer.WebSearchData> dataList = new ArrayList<>();
 
-            int counter = 0;
+            counter = 0;
             if (!resultList.isEmpty()) {
                 for (String[] result : resultList) {
 

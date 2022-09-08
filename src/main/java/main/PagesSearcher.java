@@ -39,7 +39,7 @@ public class PagesSearcher extends RecursiveTask<Vector<Page>> {
 
 //        String baseIndex = "playback.ru";
 
-        String subLinkRegex = "\\/[A-z0-9]*\\.html?";
+        String subLinkRegex = "\\/[A-z\\d\\/]*\\.html?";
 
         String skillboxRegex = ".*" + baseIndex.substring(0,baseIndex.length() - 3) + "\\.ru" + ".*";
         String regexPdf = ".*\\.[A-z]{3,4}.*";
