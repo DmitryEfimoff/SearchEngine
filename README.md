@@ -25,7 +25,7 @@ Search results are shown as a list in according with their relevation index.
 _NOTE: search process may take a significant time depends of your server capacilty and query request relevation._
 
 ## IMPORTANT NOTE
-MySQL table **Field** should be created manually in _**search_engine**_ base before **first run!!!** as shown below
+MySQL table **Field** should be created manually in _**search_engine**_ base _**before**_ **first run!!!** as shown below
 
     CREATE TABLE `search_engine`.`field` (
             `id` INT NOT NULL AUTO_INCREMENT,
