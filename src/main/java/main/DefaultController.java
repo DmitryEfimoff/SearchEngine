@@ -7,6 +7,7 @@ import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
+import java.sql.SQLOutput;
 import java.util.*;
 
 @RestController
@@ -130,6 +131,12 @@ public class DefaultController {
                     }
                 }
 
+//                for (Float frq : sortedRequest.keySet()) {
+//                    sortedRequest.get(frq).forEach(i -> System.out.print(i + " "));
+//                    System.out.println("");
+//                }
+//                System.out.println("End of sorted request");
+
 
                 List<Integer> resultPages = new ArrayList<>();
                 HashMap<Integer, HashMap<Integer,Float>> foundPages = new HashMap<>();
@@ -184,6 +191,13 @@ public class DefaultController {
 
                 }
 
+//                int itg =0;
+//                for (Integer i : foundPages.keySet()) {
+//                    itg++;
+//                    System.out.print(i + " ");
+//                }
+//                System.out.println("\n" + " End of found pages: " + itg);
+
 
                 HashMap<Integer, Float> absRel = new HashMap<>();
                 Float maxAbsRel = 0F;
@@ -198,23 +212,37 @@ public class DefaultController {
                     if (maxAbsRel < absRel.get(pageId)) { maxAbsRel = absRel.get(pageId); }
                 }
 
+//                System.out.println("Abs rel calculation complete!");
+
+                TreeMap<Integer, Page> pages = new TreeMap<>();
+                for (Page page : pageRepository.findAll()) {
+                    if (!page.getSiteId().equals(siteId) && (absRel.containsKey(page.getId()))) { continue; }
+                    pages.put(page.getId(), page);
+                }
+//                System.out.println("Pages are collected in TreeMap!");
+
 
 
                 for (Integer pageId : absRel.keySet()) {
                     relRel.put(pageId,absRel.get(pageId)/maxAbsRel);
 
-                    for (Page page : pageRepository.findAll()) {
-                        if (!page.getSiteId().equals(siteId)) { continue; }
-                        if (page.getId().equals(pageId)) {
+//                    for (Page page : pageRepository.findAll()) {
+//                        if (!page.getSiteId().equals(siteId)) { continue; }
+//                        if (page.getId().equals(pageId)) {
 
                             counter++;
+
+                            Page page = pages.get(pageId);
+
                             String[] line = new String[5];
 //                            line[0] = url + (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
                             line[0] = (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
-                            line[1] = Jsoup.parse(page.getContent()).select("title").get(0).text();
+                            if (counter <= LIMIT_DEFAULT) { System.out.println(line[0]); }
+
                             line[3] = relRel.get(pageId).toString();
                             line[4] = url;
                             if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
+                                line[1] = Jsoup.parse(page.getContent()).select("title").get(0).text();
                                 line[2] = "..." + lemmatization.snippet(firstLemma,page.getContent()) + "...";
 
                                 WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
@@ -227,12 +255,14 @@ public class DefaultController {
                                 dataList.add(newData);
 
                             } else {
+                                line[1] = "N/A - out of offset and limit";
                                 line[2] = "N/A - out of offset and limit";
                             }
                             resultList.add(line);
+//                            System.out.println("added!");
 
-                        }
-                    }
+//                        }
+//                    }
 
                 }
 
