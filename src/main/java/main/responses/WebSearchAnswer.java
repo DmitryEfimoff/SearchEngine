@@ -1,4 +1,4 @@
-package main;
+package main.responses;
 
 import javax.persistence.criteria.CriteriaBuilder;
 import java.util.List;

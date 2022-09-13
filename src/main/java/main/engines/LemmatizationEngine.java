@@ -1,4 +1,4 @@
-package main;
+package main.engines;
 
 import org.apache.lucene.morphology.LuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
@@ -9,9 +9,38 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
-public class Lemmatization {
+public class LemmatizationEngine extends Thread {
+
+    public LemmatizationEngine() {}
+
+    public LemmatizationEngine(String firstLemma, String content, String uri) {
+       this.firstLemma = firstLemma;
+       this.content = content;
+       this.uri = uri;
+    }
+
+    private String uri;
+    private String firstLemma;
+    private String content;
+    private String title;
+    private String snip;
 
     private String rusWordRegex = "[А-я]+";
+
+    public String getTitle() { return title; }
+
+    public String getSnip() { return snip; }
+
+    public String getUri() { return uri; }
+
+    @Override
+    public void run() {
+
+        title = Jsoup.parse(content).select("title").get(0).text();
+        snip = "..." + snippet(firstLemma,content) + "...";;
+        System.out.println("Thread is done!");
+
+    }
 
     public HashMap<String, Integer> wordLemmas(String[] words) {
 

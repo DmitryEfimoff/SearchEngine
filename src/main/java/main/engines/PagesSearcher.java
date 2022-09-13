@@ -1,4 +1,4 @@
-package main;
+package main.engines;
 
 import main.model.Page;
 import org.jsoup.Connection;

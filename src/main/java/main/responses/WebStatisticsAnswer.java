@@ -1,4 +1,4 @@
-package main;
+package main.responses;
 
 import java.util.Date;
 import java.util.List;

@@ -1,4 +1,4 @@
-package main;
+package main.responses;
 
 public class WebAnswer {
 

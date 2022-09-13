@@ -1,9 +1,5 @@
 package main;
 
-import org.hibernate.SessionFactory;
-import org.hibernate.boot.model.source.spi.PluralAttributeElementSourceManyToMany;
-
-import org.hibernate.cfg.Configuration;
 import org.springframework.boot.SpringApplication;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;

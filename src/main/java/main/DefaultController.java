@@ -1,16 +1,23 @@
 package main;
 
+import main.engines.IndexationEngine;
+import main.engines.LemmatizationEngine;
+import main.engines.SearchEngine;
 import main.model.*;
+import main.responses.WebAnswer;
+import main.responses.WebSearchAnswer;
+import main.responses.WebSearchRequest;
+import main.responses.WebStatisticsAnswer;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
-import java.sql.SQLOutput;
 import java.util.*;
 
-@RestController
+@Controller
 public class DefaultController {
 
     private static final Integer OFFSET_DEFAULT = 0;
@@ -25,7 +32,7 @@ public class DefaultController {
 
     private Long startTime;
 
-    private Lemmatization lemmatization = new Lemmatization();
+    private LemmatizationEngine lemmatization = new LemmatizationEngine();
 
     @Autowired
     private PageRepository pageRepository;
@@ -42,7 +49,13 @@ public class DefaultController {
     @Autowired
     private SiteRepository siteRepository;
 
+    @RequestMapping("/admin")
+    public String index(){
+        return "index.html";
+    }
+
     @GetMapping("/search")
+    @ResponseBody
     public WebSearchAnswer request(WebSearchRequest request) {
 
         WebSearchAnswer answer = new WebSearchAnswer();
@@ -131,12 +144,6 @@ public class DefaultController {
                     }
                 }
 
-//                for (Float frq : sortedRequest.keySet()) {
-//                    sortedRequest.get(frq).forEach(i -> System.out.print(i + " "));
-//                    System.out.println("");
-//                }
-//                System.out.println("End of sorted request");
-
 
                 List<Integer> resultPages = new ArrayList<>();
                 HashMap<Integer, HashMap<Integer,Float>> foundPages = new HashMap<>();
@@ -191,14 +198,6 @@ public class DefaultController {
 
                 }
 
-//                int itg =0;
-//                for (Integer i : foundPages.keySet()) {
-//                    itg++;
-//                    System.out.print(i + " ");
-//                }
-//                System.out.println("\n" + " End of found pages: " + itg);
-
-
                 HashMap<Integer, Float> absRel = new HashMap<>();
                 Float maxAbsRel = 0F;
                 HashMap<Integer, Float> relRel = new HashMap<>();
@@ -212,45 +211,39 @@ public class DefaultController {
                     if (maxAbsRel < absRel.get(pageId)) { maxAbsRel = absRel.get(pageId); }
                 }
 
-//                System.out.println("Abs rel calculation complete!");
-
                 TreeMap<Integer, Page> pages = new TreeMap<>();
                 for (Page page : pageRepository.findAll()) {
                     if (!page.getSiteId().equals(siteId) && (absRel.containsKey(page.getId()))) { continue; }
                     pages.put(page.getId(), page);
                 }
-//                System.out.println("Pages are collected in TreeMap!");
 
-
+                List<LemmatizationEngine> lems = new ArrayList<>();
 
                 for (Integer pageId : absRel.keySet()) {
                     relRel.put(pageId,absRel.get(pageId)/maxAbsRel);
-
-//                    for (Page page : pageRepository.findAll()) {
-//                        if (!page.getSiteId().equals(siteId)) { continue; }
-//                        if (page.getId().equals(pageId)) {
 
                             counter++;
 
                             Page page = pages.get(pageId);
 
                             String[] line = new String[5];
-//                            line[0] = url + (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
                             line[0] = (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
-                            if (counter <= LIMIT_DEFAULT) { System.out.println(line[0]); }
 
                             line[3] = relRel.get(pageId).toString();
                             line[4] = url;
                             if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
-                                line[1] = Jsoup.parse(page.getContent()).select("title").get(0).text();
-                                line[2] = "..." + lemmatization.snippet(firstLemma,page.getContent()) + "...";
+
+                                System.out.println(line[0]);
+
+                                LemmatizationEngine lmt = new LemmatizationEngine(firstLemma, page.getContent(), line[0]);
+                                lmt.start();
+                                System.out.println("Thread " + counter + " is started!");
+                                lems.add(lmt);
 
                                 WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
                                 newData.setSite(line[4]);
                                 newData.setSiteName(line[4]);
                                 newData.setUri(line[0]);
-                                newData.setTitle(line[1]);
-                                newData.setSnippet(line[2]);
                                 newData.setRelevance(Float.parseFloat(line[3]));
                                 dataList.add(newData);
 
@@ -258,13 +251,37 @@ public class DefaultController {
                                 line[1] = "N/A - out of offset and limit";
                                 line[2] = "N/A - out of offset and limit";
                             }
-                            resultList.add(line);
-//                            System.out.println("added!");
 
-//                        }
-//                    }
+                            resultList.add(line);
 
                 }
+
+                boolean threadsDone = false;
+                while (!threadsDone) {
+                    int cnt = 0;
+                    int done = 0;
+                    for (LemmatizationEngine lem : lems) {
+                        cnt++;
+                        if ((lem.getTitle() != null) && (lem.getSnip() != null)) { done++; }
+                    }
+                    if (cnt == done) {
+                        threadsDone = true;
+                        System.out.println("Threads are done!!!");
+                    }
+                }
+
+                for (WebSearchAnswer.WebSearchData data : dataList) {
+
+                    for (LemmatizationEngine lm : lems) {
+                        if (lm.getUri().equals(data.getUri())) {
+                            data.setTitle(lm.getTitle());
+                            data.setSnippet(lm.getSnip());
+                        }
+                    }
+
+                    System.out.println(data.getTitle() + " - " + data.getUri());
+                }
+
 
                 siteId++;
             }
@@ -286,6 +303,7 @@ public class DefaultController {
     }
 
     @GetMapping("/statistics")
+    @ResponseBody
     public WebStatisticsAnswer statistics(){
 
         WebStatisticsAnswer answer = new WebStatisticsAnswer();
@@ -338,6 +356,7 @@ public class DefaultController {
 
 
     @GetMapping("/startIndexing")
+    @ResponseBody
     public WebAnswer startIndexing() throws IOException {
 
         indexationStopper = false;
@@ -379,6 +398,7 @@ public class DefaultController {
     }
 
     @GetMapping("/stopIndexing")
+    @ResponseBody
     public WebAnswer stopIndexing() {
 
         WebAnswer webAnswer = new WebAnswer();
@@ -411,6 +431,7 @@ public class DefaultController {
     }
 
     @PostMapping("/indexPage")
+    @ResponseBody
     public WebAnswer indexPage(String url) throws IOException, InterruptedException {
 
         indexationStopper = false;
@@ -444,6 +465,7 @@ public class DefaultController {
     }
 
     @PostMapping("/indexPages")
+    @ResponseBody
     public WebAnswer indexPages(String url, String siteIdI) throws IOException, InterruptedException {
 
         indexationStopper = false;
