@@ -1,4 +1,4 @@
-package main;
+package main.controller;
 
 import main.engines.IndexationEngine;
 import main.engines.LemmatizationEngine;
