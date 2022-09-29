@@ -8,6 +8,8 @@ import main.responses.WebAnswer;
 import main.responses.WebSearchAnswer;
 import main.responses.WebSearchRequest;
 import main.responses.WebStatisticsAnswer;
+import main.service.IndexationService;
+import main.service.SearchService;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -49,6 +51,16 @@ public class DefaultController {
     @Autowired
     private SiteRepository siteRepository;
 
+    @Autowired
+    private SearchService searchService;
+
+    @Autowired
+    private IndexationService indexationService;
+
+    public static Integer getOffsetDefault() { return OFFSET_DEFAULT; }
+
+    public static Integer getLimitDefault() { return  LIMIT_DEFAULT; }
+
     @RequestMapping("/admin")
     public String index(){
         return "index.html";
@@ -59,236 +71,41 @@ public class DefaultController {
     public WebSearchAnswer request(WebSearchRequest request) {
 
         WebSearchAnswer answer = new WebSearchAnswer();
-        List<WebSearchAnswer.WebSearchData> dataList = new ArrayList<>();
 
-        int counter = 0;
+        List<Site> sitesRep = (List<Site>) siteRepository.findAll();
+        List<Lemma> lemmasRep = (List<Lemma>) lemmaRepository.findAll();
+        List<Index> indexRep = (List<Index>) indexRepository.findAll();
+        List<Page> pagesRep = (List<Page>) pageRepository.findAll();
 
-        if (urlList.isEmpty()) {
-            SiteList.getUrls().forEach(u -> urlList.add(u));
-
-        }
-
-        if (request.getOffset() == null) { request.setOffset(OFFSET_DEFAULT); }
-        if (request.getLimit() == null) { request.setLimit(LIMIT_DEFAULT); }
+        urlList = searchService.urlListCheck(urlList);
+        request = searchService.requestDefaultsCheck(request);
 
         boolean isEmptyQuery = request.getQuery().isBlank();
-        boolean existingSite = false;
-        if (request.getSite() == null) {
-            existingSite = true;
-        } else {
-            if (urlList.contains(request.getSite())) { existingSite = true; }
-        }
-
-
-        boolean isIndexedSite = false;
-        if (request.getSite() == null) {
-            for (Site site : siteRepository.findAll()) {
-                if (site.getStatus().equals(Status.INDEXED.toString())) {
-                    isIndexedSite = true;
-                    break;
-                }
-            }
-        } else {
-            for (Site site : siteRepository.findAll()) {
-                if (site.getUrl().equals(request.getSite()) && site.getStatus().equals(Status.INDEXED.toString())) {
-                    isIndexedSite = true;
-                    break;
-                }
-            }
-        }
+        boolean existingSite = searchService.existingSiteCheck(urlList, request);
+        boolean isIndexedSite = searchService.indexedSiteCheck(request, sitesRep);
 
 
         if (!isEmptyQuery && existingSite && isIndexedSite) {
 
-            String[] words = request.getQuery().split("\\s");
+            HashMap<String, Integer> requestWords = lemmatization.wordLemmas(request.getQuery().split("\\s"));
 
-            HashMap<String, Integer> requestWords = lemmatization.wordLemmas(words);
+            List<String> urlSearchList = searchService.urlSearchListSet(request, urlList);
 
-            List<String[]> resultList = new ArrayList<>();
-
-            List<String> urlSearchList = new ArrayList<>();
-            if (request.getSite() == null) {
-                urlSearchList = urlList;
-            } else {
-                urlSearchList.add(request.getSite());
-            }
-
-            int siteId = 1;
+            int siteId = 0;
             for (String url : urlSearchList) {
 
-                boolean siteIsIndexed = false;
-                for (Site site : siteRepository.findAll()) {
-                    if ((site.getStatus().equals(Status.INDEXED.toString())) && (site.getUrl().equals(url))) { siteIsIndexed = true; }
-                }
-                if (!siteIsIndexed) {
-                    siteId++;
-                    continue;
-                }
-
-                TreeMap<Float, List<Integer>> sortedRequest = new TreeMap<>();
-
-                for (String word : requestWords.keySet()) {
-                    for (Lemma lemma : lemmaRepository.findAll()) {
-                        if (lemma.getSiteId() != siteId) { continue; }
-                        if (lemma.getLemma().equals(word)) {
-                            if (sortedRequest.containsKey(lemma.getFrequency())) {
-                                List<Integer> newList = sortedRequest.get(lemma.getFrequency());
-                                newList.add(lemma.getId());
-                                sortedRequest.put(lemma.getFrequency(), newList);
-                            } else {
-                                List<Integer> newList = new ArrayList<>();
-                                newList.add(lemma.getId());
-                                sortedRequest.put(lemma.getFrequency(), newList);
-                            }
-                        }
-                    }
-                }
-
-
-                List<Integer> resultPages = new ArrayList<>();
-                HashMap<Integer, HashMap<Integer,Float>> foundPages = new HashMap<>();
-
-                boolean isStartElement = true;
-                String firstLemma = new String();
-                for (Float frq : sortedRequest.keySet()) {
-                    for (Integer lemmaId : sortedRequest.get(frq)) {
-
-                        if (isStartElement) {
-
-                            if (firstLemma.isEmpty()) {
-                                for (Lemma lemma : lemmaRepository.findAll()) {
-                                    if (lemmaId == lemma.getId()) {
-                                        firstLemma = lemma.getLemma();
-                                        break;
-                                    }
-                                }
-                            }
-
-                            for (Index index : indexRepository.findAll()) {
-                                if (!index.getSiteId().equals(siteId)) { continue; }
-                                if (index.getLemmaId().equals(lemmaId)) {
-                                    HashMap<Integer,Float> lemmaWeight = new HashMap<>();
-                                    lemmaWeight.put(lemmaId, index.getRanke());
-                                    foundPages.put(index.getPageId(), lemmaWeight);
-                                    resultPages.add(index.getPageId());
-                                }
-                            }
-
-                        } else {
-                            List<Integer> reducedResultPages = new ArrayList<>();
-                            for (Index index : indexRepository.findAll()) {
-
-                                if ((index.getLemmaId().equals(lemmaId)) && (resultPages.contains(index.getPageId()))) {
-                                    HashMap<Integer,Float> lemmaWeight = foundPages.get(index.getPageId());
-                                    lemmaWeight.put(lemmaId, index.getRanke());
-                                    foundPages.put(index.getPageId(), lemmaWeight);
-                                    reducedResultPages.add(index.getPageId());
-                                }
-                            }
-                            for (Integer pageId : resultPages) {
-                                if (!reducedResultPages.contains(pageId)) {
-                                    foundPages.remove(pageId);
-                                }
-                            }
-                            resultPages = reducedResultPages;
-                        }
-
-                    }
-                    isStartElement = false;
-
-                }
-
-                HashMap<Integer, Float> absRel = new HashMap<>();
-                Float maxAbsRel = 0F;
-                HashMap<Integer, Float> relRel = new HashMap<>();
-
-                for (Integer pageId : foundPages.keySet()) {
-                    absRel.put(pageId, 0F);
-                    HashMap<Integer,Float> lemmas = foundPages.get(pageId);
-                    for (Integer lemma : lemmas.keySet()) {
-                        absRel.put(pageId, absRel.get(pageId) + lemmas.get(lemma));
-                    }
-                    if (maxAbsRel < absRel.get(pageId)) { maxAbsRel = absRel.get(pageId); }
-                }
-
-                TreeMap<Integer, Page> pages = new TreeMap<>();
-                for (Page page : pageRepository.findAll()) {
-                    if (!page.getSiteId().equals(siteId) && (absRel.containsKey(page.getId()))) { continue; }
-                    pages.put(page.getId(), page);
-                }
-
-                List<LemmatizationEngine> lems = new ArrayList<>();
-
-                for (Integer pageId : absRel.keySet()) {
-                    relRel.put(pageId,absRel.get(pageId)/maxAbsRel);
-
-                            counter++;
-
-                            Page page = pages.get(pageId);
-
-                            String[] line = new String[5];
-                            line[0] = (url.charAt(url.length()-1) == '/' ? page.getPath().substring(1) : page.getPath());
-
-                            line[3] = relRel.get(pageId).toString();
-                            line[4] = url;
-                            if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
-
-                                System.out.println(line[0]);
-
-                                LemmatizationEngine lmt = new LemmatizationEngine(firstLemma, page.getContent(), line[0]);
-                                lmt.start();
-                                System.out.println("Thread " + counter + " is started!");
-                                lems.add(lmt);
-
-                                WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
-                                newData.setSite(line[4]);
-                                newData.setSiteName(line[4]);
-                                newData.setUri(line[0]);
-                                newData.setRelevance(Float.parseFloat(line[3]));
-                                dataList.add(newData);
-
-                            } else {
-                                line[1] = "N/A - out of offset and limit";
-                                line[2] = "N/A - out of offset and limit";
-                            }
-
-                            resultList.add(line);
-
-                }
-
-                boolean threadsDone = false;
-                while (!threadsDone) {
-                    int cnt = 0;
-                    int done = 0;
-                    for (LemmatizationEngine lem : lems) {
-                        cnt++;
-                        if ((lem.getTitle() != null) && (lem.getSnip() != null)) { done++; }
-                    }
-                    if (cnt == done) {
-                        threadsDone = true;
-                        System.out.println("Threads are done!!!");
-                    }
-                }
-
-                for (WebSearchAnswer.WebSearchData data : dataList) {
-
-                    for (LemmatizationEngine lm : lems) {
-                        if (lm.getUri().equals(data.getUri())) {
-                            data.setTitle(lm.getTitle());
-                            data.setSnippet(lm.getSnip());
-                        }
-                    }
-
-                    System.out.println(data.getTitle() + " - " + data.getUri());
-                }
-
-
                 siteId++;
-            }
+                if (!searchService.siteIsIndexed(url, sitesRep)) { continue; }
 
-            answer.setResult(true);
-            answer.setCount(counter);
-            answer.setData(dataList);
+                TreeMap<Float, List<Integer>> sortedRequest = searchService.sortedRequest(requestWords, lemmasRep, siteId);
+                HashMap<Integer, HashMap<Integer,Float>> foundPages = searchService.foundPagesSearch(sortedRequest, lemmasRep, indexRep, siteId);
+                HashMap<Integer, Float> absRel = searchService.absRelCalculation(foundPages, pagesRep, siteId);
+                TreeMap<Integer, Page> pages = searchService.pagesCollector(pagesRep, absRel, siteId);
+                HashMap<Integer, Float> relRel = searchService.relRel(absRel);
+
+                answer = searchService.searchThreadsStarter(answer, request, absRel,relRel, pages, url);
+
+            }
 
         } else {
 
@@ -544,205 +361,81 @@ public class DefaultController {
 
     }
 
+    public boolean stopper(){
+        if (indexationStopper) {
+            isIndexationWorks = false;
+            System.out.println("Indexation process Interrupted!");
+            return true;
+        }
+        return false;
+    }
 
     public void indexation(int siteId, String url) throws IOException {
 
+        List<Site> sitesRep = (List<Site>) siteRepository.findAll();
+        List<Lemma> lemmasRep = (List<Lemma>) lemmaRepository.findAll();
+        List<Index> indexRep = (List<Index>) indexRepository.findAll();
+        List<Page> pagesRep = (List<Page>) pageRepository.findAll();
+        List<Field> fieldRep = (List<Field>) fieldRepository.findAll();
+
         System.out.println("Indexation process started!");
 
-//            Stopper
-        if (indexationStopper) {
-            isIndexationWorks = false;
-            System.out.println("Indexation process Interrupted!");
-            return;
-        }
+        if (stopper()) { return; }
 
-        boolean pagesIndexed = false;
-        for (Page page : pageRepository.findAll()) {
-            pagesIndexed = true;
-            break;
-        }
-        if (!pagesIndexed) { return; }
+        if (!indexationService.pagesIndexed(pagesRep)) { return; }
 
-        Site actualSite = null;
+        Site actualSite = indexationService.siteIsFound(sitesRep, url, siteId);
+        siteRepository.save(actualSite);
 
-        boolean siteIsFound = false;
-        for (Site site : siteRepository.findAll()) {
-            if (site.getUrl().equals(url) && (site.getId().equals(siteId))) {
-                siteIsFound = true;
-                site.setStatus(Status.INDEXING.toString());
-                site.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                siteRepository.save(site);
-                actualSite = site;
-            }
-        }
-        if (!siteIsFound) {
-            Site newSite = new Site();
-            newSite.setId(siteId);
-            newSite.setUrl(url);
-            newSite.setName(url);
-            newSite.setStatus(Status.INDEXING.toString());
-            newSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-            siteRepository.save(newSite);
-            actualSite = newSite;
-        }
+        if (!indexationService.siteIsIndexed(pagesRep, siteId)) { return; }
 
+        if (stopper()) { return; }
 
-        boolean siteIndexed = false;
-        for (Page page : pageRepository.findAll()) {
-            if (page.getSiteId().equals(siteId)) {
-                siteIndexed = true;
-                break;
-            }
-        }
-        if (!siteIndexed) {
-            siteId++;
-            return;
-        }
+        List<Lemma> lemmas = indexationService.existingLemmas(lemmasRep, siteId);
+        List<Index> indexes = indexationService.existingIndexes(indexRep, siteId);
 
-//            Stopper
-        if (indexationStopper) {
-            isIndexationWorks = false;
-            System.out.println("Indexation process Interrupted!");
-            return;
-        }
-
-        List<Lemma> lemmas = new ArrayList<>();
-        List<Index> indexes = new ArrayList<>();
-
-        if (!lemmaRepository.equals(null)) {
-            for (Lemma lemma : lemmaRepository.findAll()) {
-                if (lemma.getSiteId() == siteId) {
-                    lemma.setFrequency(0F);
-                    lemmas.add(lemma);
-                }
-            }
-        }
-        if (!indexRepository.equals(null)) {
-            for (Index index : indexRepository.findAll()) {
-                if (index.getSiteId() == siteId) {
-                    index.setRanke(0F);
-                    indexes.add(index);
-                }
-            }
-        }
-
-//            Stopper
-        if (indexationStopper) {
-            isIndexationWorks = false;
-            System.out.println("Indexation process Interrupted!");
-            return;
-        }
+        if (stopper()) { return; }
 
         for (Page resultPage : pageRepository.findAll()) {
 
             if (resultPage.getSiteId() != siteId) { continue; }
 
-            HashMap<String,Float> convertedWords = new HashMap<>();
-
-            for (Field field : fieldRepository.findAll()) {
-
-                String query = field.getName();
-                Elements dTable = Jsoup.parse(resultPage.getContent()).select(query);
-
-                for (Element tbl: dTable) {
-                    String txt = tbl.text();
-                    String[] words = txt.split("\\s");
-                    HashMap<String,Integer> receivedWords = lemmatization.wordLemmas(words);
-
-                    for (String word : receivedWords.keySet()) {
-                        if (convertedWords.containsKey(word)) {
-                            convertedWords.put(word, convertedWords.get(word) + receivedWords.get(word)* field.getWeight());
-                        } else {
-                            convertedWords.put(word, receivedWords.get(word)* field.getWeight());
-                        }
-                    }
-
-                }
-
-            }
+            HashMap<String,Float> convertedWords = indexationService.convertedWords(resultPage, fieldRep);
 
             for (String word : convertedWords.keySet()) {
 
-                int lemmaID = 0;
+                Lemma lemmaDefined = indexationService.lemmaDefined(word, lemmas, siteId);
 
-                boolean lemmaExists = false;
-                if (!lemmas.equals(null)){
-                    for (Lemma lemma : lemmas) {
-                        if (lemma.getLemma().equals(word)) {
-                            lemma.setFrequency(lemma.getFrequency() + 1F);
-                            lemmaRepository.save(lemma);
-                            lemmaID = lemma.getId();
-                            lemmaExists = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!lemmaExists) {
-                    Lemma lemma = new Lemma();
-                    lemma.setLemma(word);
-                    lemma.setFrequency(1F);
-                    lemma.setSiteId(siteId);
-                    lemmaRepository.save(lemma);
+                if (lemmaDefined.getId() == null) {
+                    lemmaRepository.save(lemmaDefined);
                     for (Lemma lemmaBase : lemmaRepository.findAll()) {
                         if (lemmaBase.getSiteId() != siteId) { continue; }
                         if (lemmaBase.getLemma().equals(word)) {
-                            lemma.setId(lemmaBase.getId());
-                            lemmaID = lemma.getId();
+                            lemmaDefined.setId(lemmaBase.getId());
                             break;
                         }
                     }
-                    lemmas.add(lemma);
+                    lemmas.add(lemmaDefined);
+                } else {
+                    lemmaRepository.save(lemmaDefined);
                 }
 
-                boolean indexExists = false;
-                if (!indexes.equals(null)) {
-                    for (Index index : indexes) {
-                        if ((index.getPageId() == resultPage.getId()) && (index.getLemmaId() == lemmaID)) {
-                            index.setRanke(convertedWords.get(word));
-                            indexRepository.save(index);
-                            actualSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                            siteRepository.save(actualSite);
-                            indexExists = true;
-                            break;
-                        }
-                    }
-                }
+                Index indexDefined = indexationService.indexDefined(indexes, resultPage, lemmaDefined.getId(), convertedWords.get(word), siteId);
 
-                if (!indexExists) {
-                    Index index = new Index();
-                    index.setPageId(resultPage.getId());
-                    index.setSiteId(siteId);
-                    index.setLemmaId(lemmaID);
-                    index.setRanke(convertedWords.get(word));
-                    indexRepository.save(index);
-                    actualSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                    siteRepository.save(actualSite);
-                }
+                indexRepository.save(indexDefined);
+
+                actualSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
+                siteRepository.save(actualSite);
 
             }
 
-//            Stopper
-            if (indexationStopper) {
-                isIndexationWorks = false;
-                System.out.println("Indexation process Interrupted!");
-                return;
-            }
+            if (stopper()) { return; }
         }
 
         for (Site site : siteRepository.findAll()) {
-            if (site.getUrl().equals(url) && (site.getId().equals(siteId))) {
-                site.setStatus(Status.INDEXED.toString());
-                site.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                siteRepository.save(site);
-            }
-//            Stopper
-            if (indexationStopper) {
-                isIndexationWorks = false;
-                System.out.println("Indexation process Interrupted!");
-                return;
-            }
-
+            
+            if (site.getUrl().equals(url) && (site.getId().equals(siteId))) { siteRepository.save(indexationService.siteStatusUpdate(site)); }
+            if (stopper()) { return; }
         }
 
         System.out.println("Indexation process Complete!");
