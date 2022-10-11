@@ -1,18 +1,13 @@
 package main.controller;
 
 import main.engines.IndexationEngine;
-import main.engines.LemmatizationEngine;
 import main.engines.SearchEngine;
 import main.model.*;
 import main.responses.WebAnswer;
 import main.responses.WebSearchAnswer;
 import main.responses.WebSearchRequest;
 import main.responses.WebStatisticsAnswer;
-import main.service.IndexationService;
-import main.service.SearchService;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import main.service.MainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
@@ -34,28 +29,9 @@ public class DefaultController {
 
     private Long startTime;
 
-    private LemmatizationEngine lemmatization = new LemmatizationEngine();
-
     @Autowired
-    private PageRepository pageRepository;
+    private MainService mainService;
 
-    @Autowired
-    private FieldRepository fieldRepository;
-
-    @Autowired
-    private LemmaRepository lemmaRepository;
-
-    @Autowired
-    private IndexRepository indexRepository;
-
-    @Autowired
-    private SiteRepository siteRepository;
-
-    @Autowired
-    private SearchService searchService;
-
-    @Autowired
-    private IndexationService indexationService;
 
     public static Integer getOffsetDefault() { return OFFSET_DEFAULT; }
 
@@ -70,105 +46,14 @@ public class DefaultController {
     @ResponseBody
     public WebSearchAnswer request(WebSearchRequest request) {
 
-        WebSearchAnswer answer = new WebSearchAnswer();
-
-        List<Site> sitesRep = (List<Site>) siteRepository.findAll();
-        List<Lemma> lemmasRep = (List<Lemma>) lemmaRepository.findAll();
-        List<Index> indexRep = (List<Index>) indexRepository.findAll();
-        List<Page> pagesRep = (List<Page>) pageRepository.findAll();
-
-        urlList = searchService.urlListCheck(urlList);
-        request = searchService.requestDefaultsCheck(request);
-
-        boolean isEmptyQuery = request.getQuery().isBlank();
-        boolean existingSite = searchService.existingSiteCheck(urlList, request);
-        boolean isIndexedSite = searchService.indexedSiteCheck(request, sitesRep);
-
-
-        if (!isEmptyQuery && existingSite && isIndexedSite) {
-
-            HashMap<String, Integer> requestWords = lemmatization.wordLemmas(request.getQuery().split("\\s"));
-
-            List<String> urlSearchList = searchService.urlSearchListSet(request, urlList);
-
-            int siteId = 0;
-            for (String url : urlSearchList) {
-
-                siteId++;
-                if (!searchService.siteIsIndexed(url, sitesRep)) { continue; }
-
-                TreeMap<Float, List<Integer>> sortedRequest = searchService.sortedRequest(requestWords, lemmasRep, siteId);
-                HashMap<Integer, HashMap<Integer,Float>> foundPages = searchService.foundPagesSearch(sortedRequest, lemmasRep, indexRep, siteId);
-                HashMap<Integer, Float> absRel = searchService.absRelCalculation(foundPages, pagesRep, siteId);
-                TreeMap<Integer, Page> pages = searchService.pagesCollector(pagesRep, absRel, siteId);
-                HashMap<Integer, Float> relRel = searchService.relRel(absRel);
-
-                answer = searchService.searchThreadsStarter(answer, request, absRel,relRel, pages, url);
-
-            }
-
-        } else {
-
-            answer.setResult(false);
-            if (isEmptyQuery) { answer.setError("Задан пустой поисковый запрос"); };
-            if (!existingSite) { answer.setError("Заданный сайт отсутствует в конфигурационном списке"); };
-            if (!isIndexedSite) { answer.setError("Заданный сайт не проиндексирован"); };
-
-        }
-
-        return answer;
+        return mainService.searchProcess(request, urlList);
     }
 
     @GetMapping("/statistics")
     @ResponseBody
     public WebStatisticsAnswer statistics(){
 
-        WebStatisticsAnswer answer = new WebStatisticsAnswer();
-        answer.setResult(true);
-        WebStatisticsAnswer.WebStatistics statistics = new WebStatisticsAnswer.WebStatistics();
-        WebStatisticsAnswer.WebStatistics.WebTotal total = new WebStatisticsAnswer.WebStatistics.WebTotal();
-        List<WebStatisticsAnswer.WebStatistics.WebDetailed> detailedList = new ArrayList<>();
-
-        Integer sitesCounter = 0;
-        for (Site site : siteRepository.findAll()) {
-            WebStatisticsAnswer.WebStatistics.WebDetailed detailed = new WebStatisticsAnswer.WebStatistics.WebDetailed();
-
-            detailed.setUrl(site.getUrl());
-            detailed.setName(site.getName());
-            detailed.setStatus(site.getStatus());
-            detailed.setStatusTime(site.getStatusTime());
-            detailed.setError(site.getLastError());
-
-            Integer pageCounter = 0;
-            for (Page page: pageRepository.findAll()) {
-                if (page.getSiteId() == site.getId()) { pageCounter++; }
-            }
-            detailed.setPages(pageCounter);
-
-            Integer lemmaCounter = 0;
-            for (Lemma lemma : lemmaRepository.findAll()) {
-                if (lemma.getSiteId() == site.getId()) { lemmaCounter++; }
-            }
-            detailed.setLemmas(lemmaCounter);
-
-            detailedList.add(detailed);
-            sitesCounter++;
-        }
-
-        Integer pagesCounter = 0;
-        for (Page page : pageRepository.findAll()) { pagesCounter++; }
-        Integer lemmaCounter = 0;
-        for (Lemma lemma : lemmaRepository.findAll()) { lemmaCounter++; }
-
-        total.setSites(sitesCounter);
-        total.setPages(pagesCounter);
-        total.setLemmas(lemmaCounter);
-        total.setIndexing(isIndexationWorks);
-        statistics.setTotal(total);
-        statistics.setDetailed(detailedList);
-        answer.setStatistics(statistics);
-
-        return answer;
+        return mainService.statisticsProcess(isIndexationWorks);
     }
 
 
@@ -180,17 +65,7 @@ public class DefaultController {
 
         WebAnswer webAnswer = new WebAnswer();
 
-        boolean somethingIsIndexing = false;
-        for (Site site : siteRepository.findAll()) {
-            if (site.getStatus().equals(Status.INDEXING.toString())) {
-                somethingIsIndexing = true;
-                break;
-            }
-        }
-
-        indexationStopper = false;
-
-        if (!somethingIsIndexing) {
+        if (!mainService.somethingIsIndexing()) {
             if (urlList.isEmpty()) { SiteList.getUrls().forEach(u -> urlList.add(u)); }
 
             isIndexationWorks = true;
@@ -220,24 +95,9 @@ public class DefaultController {
 
         WebAnswer webAnswer = new WebAnswer();
 
-        boolean somethingIsIndexing = false;
-        for (Site site : siteRepository.findAll()) {
-            if (site.getStatus().equals(Status.INDEXING.toString())) {
-                somethingIsIndexing = true;
-                break;
-            }
-        }
-
-        if (somethingIsIndexing) {
+        if (mainService.somethingIsIndexing()) {
             indexationStopper = true;
-            for (Site site : siteRepository.findAll()) {
-                if (site.getStatus().equals(Status.INDEXING.toString())) {
-                    site.setStatus(Status.FAILED.toString());
-                    site.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                    site.setLastError("Indexing process interrupted manually");
-                    siteRepository.save(site);
-                }
-            }
+            mainService.indexationStopperProcess();
             webAnswer.setResult(true);
         } else {
             webAnswer.setResult(false);
@@ -293,13 +153,7 @@ public class DefaultController {
 
         if (SiteList.getUrls().contains(url)) {
 
-            boolean siteParsed = false;
-            for (Page page : pageRepository.findAll()) {
-                if (page.getSiteId().equals(siteId)) {
-                    siteParsed = true;
-                    break;
-                }
-            }
+            boolean siteParsed = mainService.isSiteParsed(siteId);
             if (!siteParsed) {
 
                 SearchEngine searchEngine = new SearchEngine(url,siteId);
@@ -310,7 +164,7 @@ public class DefaultController {
                     Thread.sleep(10000);
                     if (!searchEngine.getPages().isEmpty()) {
                         siteParsed = true;
-                        siteParsePublisher(searchEngine);
+                        mainService.siteParsePublisher(searchEngine);
                     }
                 }
 
@@ -329,42 +183,13 @@ public class DefaultController {
         return webAnswer;
     }
 
-    public void siteParsePublisher(SearchEngine searchEngine) {
 
-        int siteId = searchEngine.getSiteId();
-
-        Vector<Page> searchResults = searchEngine.getPages();
-
-        for (Page page : searchResults) {
-            page.setSiteId(siteId);
-        }
-
-        HashMap<String, Integer> pagesInBase = new HashMap<>();
-
-        for (Page page : pageRepository.findAll()) {
-            if (page.getSiteId() != siteId) { continue; }
-            pagesInBase.put(page.getPath(),page.getId());
-        }
-
-
-        for (Page resultPage : searchResults) {
-
-            if (pagesInBase.containsKey(resultPage.getPath())) {
-                resultPage.setId(pagesInBase.get(resultPage.getPath()));
-                pageRepository.save(resultPage);
-            } else {
-                Page uploadPage = pageRepository.save(resultPage);
-                pagesInBase.put(resultPage.getPath(), uploadPage.getId());
-            }
-
-        }
-
-    }
 
     public boolean stopper(){
         if (indexationStopper) {
             isIndexationWorks = false;
             System.out.println("Indexation process Interrupted!");
+            mainService.indexationStopperProcess();
             return true;
         }
         return false;
@@ -372,71 +197,45 @@ public class DefaultController {
 
     public void indexation(int siteId, String url) throws IOException {
 
-        List<Site> sitesRep = (List<Site>) siteRepository.findAll();
-        List<Lemma> lemmasRep = (List<Lemma>) lemmaRepository.findAll();
-        List<Index> indexRep = (List<Index>) indexRepository.findAll();
-        List<Page> pagesRep = (List<Page>) pageRepository.findAll();
-        List<Field> fieldRep = (List<Field>) fieldRepository.findAll();
-
         System.out.println("Indexation process started!");
 
         if (stopper()) { return; }
 
-        if (!indexationService.pagesIndexed(pagesRep)) { return; }
+        if (!mainService.pagesIndexed()) { return; }
 
-        Site actualSite = indexationService.siteIsFound(sitesRep, url, siteId);
-        siteRepository.save(actualSite);
+        Site actualSite = mainService.siteIsFound(url, siteId);
 
-        if (!indexationService.siteIsIndexed(pagesRep, siteId)) { return; }
-
-        if (stopper()) { return; }
-
-        List<Lemma> lemmas = indexationService.existingLemmas(lemmasRep, siteId);
-        List<Index> indexes = indexationService.existingIndexes(indexRep, siteId);
+        if (!mainService.siteIsIndexed(siteId)) { return; }
 
         if (stopper()) { return; }
 
-        for (Page resultPage : pageRepository.findAll()) {
+        List<Lemma> lemmas = mainService.existingLemmas(siteId);
+
+        if (stopper()) { return; }
+
+        for (Page resultPage : mainService.pagesList()) {
 
             if (resultPage.getSiteId() != siteId) { continue; }
 
-            HashMap<String,Float> convertedWords = indexationService.convertedWords(resultPage, fieldRep);
+            HashMap<String,Float> convertedWords = mainService.convertedWords(resultPage);
 
             for (String word : convertedWords.keySet()) {
 
-                Lemma lemmaDefined = indexationService.lemmaDefined(word, lemmas, siteId);
+                Lemma lemmaDefined = mainService.lemmaDefined(word, lemmas, siteId);
 
-                if (lemmaDefined.getId() == null) {
-                    lemmaRepository.save(lemmaDefined);
-                    for (Lemma lemmaBase : lemmaRepository.findAll()) {
-                        if (lemmaBase.getSiteId() != siteId) { continue; }
-                        if (lemmaBase.getLemma().equals(word)) {
-                            lemmaDefined.setId(lemmaBase.getId());
-                            break;
-                        }
-                    }
-                    lemmas.add(lemmaDefined);
-                } else {
-                    lemmaRepository.save(lemmaDefined);
-                }
+                if (!lemmas.contains(lemmaDefined)) { lemmas.add(lemmaDefined); }
 
-                Index indexDefined = indexationService.indexDefined(indexes, resultPage, lemmaDefined.getId(), convertedWords.get(word), siteId);
+                Index indexDefined = mainService.indexDefined(resultPage, lemmaDefined.getId(), convertedWords.get(word), siteId);
 
-                indexRepository.save(indexDefined);
-
-                actualSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
-                siteRepository.save(actualSite);
+                mainService.actualSiteSave(actualSite);
 
             }
 
             if (stopper()) { return; }
         }
 
-        for (Site site : siteRepository.findAll()) {
-            
-            if (site.getUrl().equals(url) && (site.getId().equals(siteId))) { siteRepository.save(indexationService.siteStatusUpdate(site)); }
-            if (stopper()) { return; }
-        }
+        mainService.siteStatusUpdate(url, siteId);
+        if (stopper()) { return; }
 
         System.out.println("Indexation process Complete!");
         isIndexationWorks = false;

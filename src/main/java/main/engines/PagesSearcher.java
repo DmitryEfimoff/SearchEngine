@@ -86,7 +86,6 @@ public class PagesSearcher extends RecursiveTask<Vector<Page>> {
                     .referrer("http://www.google.com").maxBodySize(0).get();
 
 
-
             Elements docTable = doc.select("a");
 
             for (Element table : docTable) {
