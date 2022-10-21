@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.logging.Logger;
 
 @Service
 public class SearchService {
@@ -260,11 +261,13 @@ public class SearchService {
             line[4] = url;
             if ((counter > request.getOffset()) && (counter <= (request.getOffset()) + request.getLimit())) {
 
-                System.out.println(line[0]);
+//                Logger.getLogger(SearchService.class.getName()).info(line[0]);
+//                System.out.println(line[0]);
 
-                LemmatizationEngine lmt = new LemmatizationEngine(getFirstLemma(), page.getContent(), line[0]);
+                LemmatizationEngine lmt = new LemmatizationEngine(getFirstLemma(), page.getContent(), line[0], counter);
                 lmt.start();
-                System.out.println("Thread " + counter + " is started!");
+                Logger.getLogger(SearchService.class.getName()).info("Thread #" + counter + " is started for page " + line[0]);
+//                System.out.println("Thread " + counter + " is started!");
                 lems.add(lmt);
 
                 WebSearchAnswer.WebSearchData newData = new WebSearchAnswer.WebSearchData();
@@ -291,7 +294,9 @@ public class SearchService {
             }
             if (cnt == done) {
                 threadsDone = true;
-                System.out.println("Threads are done!!!");
+
+                Logger.getLogger(SearchService.class.getName()).info("Threads are done!!!");
+//                System.out.println("Threads are done!!!");
             }
         }
 
@@ -303,8 +308,8 @@ public class SearchService {
                     data.setSnippet(lm.getSnip());
                 }
             }
-
-            System.out.println(data.getTitle() + " - " + data.getUri());
+            Logger.getLogger(SearchService.class.getName()).info(data.getTitle() + " - " + data.getUri());
+//            System.out.println(data.getTitle() + " - " + data.getUri());
         }
 
         answer.setResult(true);

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.logging.Logger;
 
 @Service
 public class MainService {
@@ -39,6 +40,8 @@ public class MainService {
 
 
     public WebSearchAnswer searchProcess(WebSearchRequest request, List<String> urlList){
+
+        Logger.getLogger(MainService.class.getName()).info("Search method started for request: " + request.getQuery());
 
         WebSearchAnswer answer = new WebSearchAnswer();
 
@@ -86,10 +89,13 @@ public class MainService {
 
         }
 
+        Logger.getLogger(MainService.class.getName()).info("Search method finished process for request: " + request.getQuery());
         return answer;
     }
 
     public WebStatisticsAnswer statisticsProcess(boolean isIndexationWorks){
+
+        Logger.getLogger(MainService.class.getName()).info("Statistics requested");
 
         WebStatisticsAnswer answer = new WebStatisticsAnswer();
         answer.setResult(true);
@@ -136,6 +142,7 @@ public class MainService {
         statistics.setDetailed(detailedList);
         answer.setStatistics(statistics);
 
+        Logger.getLogger(MainService.class.getName()).info("Statistics provided");
         return answer;
     }
 

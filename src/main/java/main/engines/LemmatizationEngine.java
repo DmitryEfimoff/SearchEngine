@@ -13,15 +13,17 @@ public class LemmatizationEngine extends Thread {
 
     public LemmatizationEngine() {}
 
-    public LemmatizationEngine(String firstLemma, String content, String uri) {
+    public LemmatizationEngine(String firstLemma, String content, String uri, Integer counter) {
        this.firstLemma = firstLemma;
        this.content = content;
        this.uri = uri;
+       this.counter = counter;
     }
 
     private String uri;
     private String firstLemma;
     private String content;
+    private Integer counter;
     private String title;
     private String snip;
 
@@ -33,12 +35,14 @@ public class LemmatizationEngine extends Thread {
 
     public String getUri() { return uri; }
 
+    public Integer getCounter() { return counter; }
+
     @Override
     public void run() {
 
         title = Jsoup.parse(content).select("title").get(0).text();
         snip = "..." + snippet(firstLemma,content) + "...";;
-        System.out.println("Thread is done!");
+        System.out.println("Thread #" + counter + " is done!");
 
     }
 

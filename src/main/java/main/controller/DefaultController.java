@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.*;
+import java.util.logging.Logger;
 
 @Controller
 public class DefaultController {
@@ -93,6 +94,8 @@ public class DefaultController {
     @ResponseBody
     public WebAnswer stopIndexing() {
 
+        Logger.getLogger(DefaultController.class.getName()).info("Stop indexation request is performing ...");
+
         WebAnswer webAnswer = new WebAnswer();
 
         if (mainService.somethingIsIndexing()) {
@@ -102,6 +105,7 @@ public class DefaultController {
         } else {
             webAnswer.setResult(false);
             webAnswer.setError("Индексация не запущена");
+            Logger.getLogger(DefaultController.class.getName()).info("There is no indexation started. Stop indexation cancelled.");
         }
 
         return webAnswer;
@@ -185,10 +189,11 @@ public class DefaultController {
 
 
 
-    public boolean stopper(){
+    public boolean stopper(int siteId, String url){
         if (indexationStopper) {
             isIndexationWorks = false;
-            System.out.println("Indexation process Interrupted!");
+            Logger.getLogger(DefaultController.class.getName()).info("Indexation process Interrupted for URL: " + url + " with siteId# " + siteId);
+//            System.out.println("Indexation process Interrupted!");
             mainService.indexationStopperProcess();
             return true;
         }
@@ -197,9 +202,10 @@ public class DefaultController {
 
     public void indexation(int siteId, String url) throws IOException {
 
-        System.out.println("Indexation process started!");
+        Logger.getLogger(DefaultController.class.getName()).info("Indexation process Started for URL: " + url + " with siteId# " + siteId);
+//        System.out.println("Indexation process started!");
 
-        if (stopper()) { return; }
+        if (stopper(siteId, url)) { return; }
 
         if (!mainService.pagesIndexed()) { return; }
 
@@ -207,11 +213,11 @@ public class DefaultController {
 
         if (!mainService.siteIsIndexed(siteId)) { return; }
 
-        if (stopper()) { return; }
+        if (stopper(siteId, url)) { return; }
 
         List<Lemma> lemmas = mainService.existingLemmas(siteId);
 
-        if (stopper()) { return; }
+        if (stopper(siteId, url)) { return; }
 
         for (Page resultPage : mainService.pagesList()) {
 
@@ -231,13 +237,14 @@ public class DefaultController {
 
             }
 
-            if (stopper()) { return; }
+            if (stopper(siteId, url)) { return; }
         }
 
         mainService.siteStatusUpdate(url, siteId);
-        if (stopper()) { return; }
+        if (stopper(siteId, url)) { return; }
 
-        System.out.println("Indexation process Complete!");
+        Logger.getLogger(DefaultController.class.getName()).info("Indexation process Complete for URL: " + url + " with siteId# " + siteId);
+//        System.out.println("Indexation process Complete!");
         isIndexationWorks = false;
 
     }
