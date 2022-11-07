@@ -39,6 +39,11 @@ public class MainService {
     private LemmatizationEngine lemmatization = new LemmatizationEngine();
 
 
+    public List<Lemma> getLemmas(){
+        return (List<Lemma>) lemmaRepository.findAll();
+    }
+
+
     public WebSearchAnswer searchProcess(WebSearchRequest request, List<String> urlList){
 
         Logger.getLogger(MainService.class.getName()).info("Search method started for request: " + request.getQuery());
@@ -364,10 +369,11 @@ public class MainService {
         return index;
     }
 
-    public void actualSiteSave(Site actualSite){
+    public Site actualSiteSave(Site actualSite){
 
         actualSite.setStatusTime(new java.util.Date(new java.util.Date().getTime()));
         siteRepository.save(actualSite);
+        return actualSite;
     }
 
     public void siteStatusUpdate(String url, int siteId) {
